@@ -10,6 +10,9 @@ using System;
 using System.Data.SqlClient;
 using Newtonsoft.Json;
 using System.Data;
+using System.Threading.Tasks;
+using SendGrid;
+using SendGrid.Helpers.Mail;
 
 namespace Company.Function
 {
@@ -23,12 +26,16 @@ namespace Company.Function
             log.LogInformation($"C# IoT Hub trigger function processed a message: {Encoding.UTF8.GetString(message.Body.Array)}");
 
             var dbstring = System.Environment.GetEnvironmentVariable("SQLConn");
-
+            var thresholdValue = 30; //threshold value for temperature
 
             try
             {
                 Telemetry tmsg = JsonConvert.DeserializeObject<Telemetry>(Encoding.UTF8.GetString(message.Body.Array));
 
+                if (tmsg.temperature > thresholdValue)
+                {
+                    Execute(tmsg.temperature).Wait();
+                }
 
                 using (SqlConnection con = new SqlConnection(dbstring))
                 {
@@ -59,6 +66,19 @@ namespace Company.Function
             }
 
 
+        }
+
+        static async Task Execute(double temperatureAboveThreshold)
+        {
+            var apiKey = System.Environment.GetEnvironmentVariable("IDACS_SENDGRID_KEY");
+            var client = new SendGridClient(apiKey);
+            var from = new EmailAddress("test@example.com", "sendgrid User");
+            var subject = "Temperature Alert by IoT Hub";
+            var to = new EmailAddress("rishabhkhanna726@gmail.com", "Rishabh Khanna");
+            var plainTextContent = $"Alert! High Temperature -- {temperatureAboveThreshold}";
+            var htmlContent = $"<strong>Alert! High Temperature -- {temperatureAboveThreshold}</strong>";
+            var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
+            var response = await client.SendEmailAsync(msg);
         }
 
 
